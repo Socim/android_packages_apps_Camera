@@ -29,6 +29,7 @@ import com.android.camera.CameraSettings;
 import com.android.camera.ListPreference;
 import com.android.camera.PreferenceGroup;
 import com.android.camera.R;
+import android.util.Log;
 
 import java.util.ArrayList;
 
@@ -41,6 +42,7 @@ public class OtherSettingsPopup extends AbstractSettingPopup
 
     private Listener mListener;
     private ArrayList<ListPreference> mListItem = new ArrayList<ListPreference>();
+    public static boolean bDoOnce = true;
 
     static public interface Listener {
         public void onSettingChanged();
@@ -63,7 +65,9 @@ public class OtherSettingsPopup extends AbstractSettingPopup
             // Currently, the RecordLocationPreference is the only setting
             // which applies the on/off switch.
             if (CameraSettings.KEY_POWER_SHUTTER.equals(pref.getKey()) ||
-                    CameraSettings.KEY_RECORD_LOCATION.equals(pref.getKey())) {
+//                    CameraSettings.KEY_RECORD_LOCATION.equals(pref.getKey())) {
+                CameraSettings.KEY_RECORD_LOCATION.equals(pref.getKey()) ||
+                CameraSettings.KEY_STABILIZATION.equals(pref.getKey()) ) {
                 return R.layout.in_line_setting_switch;
             }
             return R.layout.in_line_setting_knob;
@@ -75,13 +79,18 @@ public class OtherSettingsPopup extends AbstractSettingPopup
             ListPreference pref = mListItem.get(position);
 
             int viewLayoutId = getSettingLayoutId(pref);
-            InLineSettingItem view = (InLineSettingItem)
-                    mInflater.inflate(viewLayoutId, parent, false);
-            if (viewLayoutId == R.layout.in_line_setting_restore) {
-                view.setId(R.id.restore_default);
-            }
+//            InLineSettingItem view = (InLineSettingItem)
+//                    mInflater.inflate(viewLayoutId, parent, false);
+//            if (viewLayoutId == R.layout.in_line_setting_restore) {
+//                view.setId(R.id.restore_default);
+//            }
 
-            view.initialize(pref); // no init for restore one
+//            view.initialize(pref); // no init for restore one
+            InLineSettingItem view = (InLineSettingItem)mInflater.inflate(viewLayoutId, parent, false);
+                if (viewLayoutId == R.layout.in_line_setting_restore) {
+                    view.setId(R.id.restore_default);
+                }
+            view.initialize(pref);
             view.setSettingChangedListener(OtherSettingsPopup.this);
             return view;
         }

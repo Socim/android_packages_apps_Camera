@@ -24,6 +24,9 @@ import android.hardware.Camera.CameraInfo;
 import android.hardware.Camera.Parameters;
 import android.hardware.Camera.Size;
 import android.media.CamcorderProfile;
+import android.os.Environment;
+import android.os.storage.StorageManager;
+import android.os.storage.StorageVolume;
 import android.util.FloatMath;
 import android.util.Log;
 
@@ -61,14 +64,18 @@ public class CameraSettings {
     public static final String KEY_VIDEO_FIRST_USE_HINT_SHOWN = "pref_video_first_use_hint_shown_key";
     public static final String KEY_POWER_SHUTTER = "pref_power_shutter";
 
+    public static final String KEY_STORAGE = "pref_camera_storage_key";
     public static final String KEY_POWER_MODE = "pref_camera_powermode_key";
     public static final String KEY_PICTURE_FORMAT = "pref_camera_pictureformat_key";
     public static final String KEY_COLOR_EFFECT = "pref_camera_coloreffect_key";
     public static final String KEY_AUTOEXPOSURE = "pref_camera_autoexposure_key";
     public static final String KEY_ANTIBANDING = "pref_camera_antibanding_key";
     public static final String KEY_FOCUS_TIME = "pref_camera_focus_key";
+    public static final String KEY_BURST_MODE = "pref_camera_burst_key";
+    public static final String KEY_JPEG = "pref_camera_jpeg_key";
     public static final String KEY_ISO = "pref_camera_iso_key";
     public static final String KEY_REDEYE_REDUCTION = "pref_camera_redeyereduction_key";
+    public static final String KEY_STABILIZATION = "pref_stabilization";
 
     public static final String EXPOSURE_DEFAULT_VALUE = "0";
 
@@ -158,9 +165,11 @@ public class CameraSettings {
         ListPreference antiBanding = group.findPreference(KEY_ANTIBANDING);
         ListPreference redeyeReduction = group.findPreference(KEY_REDEYE_REDUCTION);
 
-		if (redeyeReduction != null) {
-            filterUnsupportedOptions(group,
-                    redeyeReduction, mParameters.getSupportedRedeyeReductionModes());
+//		if (redeyeReduction != null) {
+//            filterUnsupportedOptions(group,
+//                    redeyeReduction, mParameters.getSupportedRedeyeReductionModes());
+	if (redeyeReduction != null) {
+            //filterUnsupportedOptions(group, redeyeReduction, mParameters.getSupportedRedeyeReductionModes());
         }
 
         if (colorEffect != null) {
@@ -173,8 +182,9 @@ public class CameraSettings {
                      antiBanding, mParameters.getSupportedAntibanding());
         }
         if (autoExposure != null) {
-            filterUnsupportedOptions(group,
-                     autoExposure, mParameters.getSupportedAutoexposure());
+//            filterUnsupportedOptions(group,
+//                     autoExposure, mParameters.getSupportedAutoexposure());
+	      filterUnsupportedOptions(group, autoExposure, mParameters.getSupportedAutoexposure());
         }
     }
 
@@ -187,14 +197,18 @@ public class CameraSettings {
         ListPreference flashMode = group.findPreference(KEY_FLASH_MODE);
         ListPreference focusMode = group.findPreference(KEY_FOCUS_MODE);
         ListPreference exposure = group.findPreference(KEY_EXPOSURE);
-        IconListPreference cameraIdPref =
-                (IconListPreference) group.findPreference(KEY_CAMERA_ID);
-        ListPreference videoFlashMode =
-                group.findPreference(KEY_VIDEOCAMERA_FLASH_MODE);
+//        IconListPreference cameraIdPref =
+//                (IconListPreference) group.findPreference(KEY_CAMERA_ID);
+//        ListPreference videoFlashMode =
+//                group.findPreference(KEY_VIDEOCAMERA_FLASH_MODE);
+        IconListPreference cameraIdPref = (IconListPreference) group.findPreference(KEY_CAMERA_ID);
+        ListPreference videoFlashMode = group.findPreference(KEY_VIDEOCAMERA_FLASH_MODE);
         ListPreference videoEffect = group.findPreference(KEY_VIDEO_EFFECT);
         ListPreference iso = group.findPreference(KEY_ISO);
         ListPreference burstMode = group.findPreference(KEY_BURST_MODE);
         ListPreference jpeg = group.findPreference(KEY_JPEG);
+        ListPreference storage = group.findPreference(KEY_STORAGE);
+        //ListPreference timer = group.findPreference(KEY_TIMER_MODE);
 
         // Since the screen could be loaded from different resources, we need
         // to check if the preference is available here
@@ -234,12 +248,44 @@ public class CameraSettings {
             initVideoEffect(group, videoEffect);
             resetIfInvalid(videoEffect);
         }
-        if (iso != null) {
-            filterUnsupportedOptions(group,
-                    iso, mParameters.getSupportedIsoValues());
-        }
+        //if (iso != null) {
+        //    filterUnsupportedOptions(group,
+        //            iso, mParameters.getSupportedIsoValues());
+        //}
+
+	if (storage != null) buildStorage(group, storage);
         if (burstMode != null) burstMode.setValueIndex(4);
         qcomInitPreferences(group);
+    }
+
+    private void buildStorage(PreferenceGroup group, ListPreference storage) {
+        StorageManager sm = (StorageManager) mContext.getSystemService(Context.STORAGE_SERVICE);
+        StorageVolume[] volumes = sm.getVolumeList();
+        String[] entries = new String[volumes.length];
+        String[] entryValues = new String[volumes.length];
+
+        if (volumes.length < 2) {
+            // No need for storage setting
+            removePreference(group, storage.getKey());
+            return;
+        }
+
+        for (int i = 0; i < volumes.length; i++) {
+            StorageVolume v = volumes[i];
+            entries[i] = v.getDescription(mContext);
+            entryValues[i] = v.getPath();
+        }
+        storage.setEntries(entries);
+        storage.setEntryValues(entryValues);
+
+        // Filter saved invalid value
+        if (storage.findIndexOfValue(storage.getValue()) < 0) {
+            // Default to the primary storage
+            storage.setValueIndex(0);
+        }
+    }
+    public static String readStorage(SharedPreferences pref) {
+        return pref.getString(KEY_STORAGE, Environment.getExternalStorageDirectory().toString());
     }
 
     private void buildExposureCompensation(

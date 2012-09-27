@@ -75,6 +75,8 @@ public class ControlPanelLayout extends RelativeLayout {
         if (mode == MeasureSpec.AT_MOST && measuredSize > specSize) {
             measuredSize = specSize;
         }
+	
+	measuredSize *= 0.65;
 
         if (isLandscape) {
             widthSpec = MeasureSpec.makeMeasureSpec(measuredSize, MeasureSpec.EXACTLY);

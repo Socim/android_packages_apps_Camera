@@ -88,21 +88,6 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
 
     private static final String TAG = "camera";
 
-    private final String[] OTHER_SETTING_KEYS = {
-                CameraSettings.KEY_RECORD_LOCATION,
-                CameraSettings.KEY_POWER_SHUTTER,
-                CameraSettings.KEY_PICTURE_SIZE,
-                CameraSettings.KEY_FOCUS_MODE,
-                CameraSettings.KEY_FOCUS_TIME,
-                CameraSettings.KEY_COLOR_EFFECT,
-                CameraSettings.KEY_ISO,
-                CameraSettings.KEY_TIMER_MODE,
-                CameraSettings.KEY_BURST_MODE,
-                CameraSettings.KEY_JPEG,
-                CameraSettings.KEY_ANTIBANDING,
-                CameraSettings.KEY_REDEYE_REDUCTION,
-                CameraSettings.KEY_AUTOEXPOSURE
-        };
 
     private boolean mRestartPreview = false;
     private boolean mAspectRatioChanged = false;
@@ -264,6 +249,15 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
     private long mStorageSpace;
     private byte[] mJpegImageData;
 
+        // Camera timer
+    private boolean mTimerMode = false;
+    private TextView mRecordingTimeView;
+    private RotateLayout mRecordingTimeRect;
+
+    // Burst mode
+    private int mBurstShotsDone = 0;
+    private boolean mBurstShotInProgress = false;
+
     // These latency time are for the CameraLatency test.
     public long mAutoFocusTime;
     public long mShutterLag;
@@ -409,6 +403,11 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
                     mOpenCameraFail = true;
                     Util.showErrorAndFinish(Camera.this,
                             R.string.cannot_connect_camera);
+                    break;
+                }
+
+                case CAMERA_TIMER: {	
+                    updateTimer(msg.arg1);
                     break;
                 }
 
@@ -586,7 +585,8 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
         queue.addIdleHandler(new MessageQueue.IdleHandler() {
             @Override
             public boolean queueIdle() {
-                Storage.ensureOSXCompatible();
+                //Storage.ensureOSXCompatible();
+		Storage.ensureOSXCompatible(Storage.mStorage);
                 return false;
             }
         });
@@ -1166,8 +1166,10 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
         private void storeImage(final byte[] data, Uri uri, String title,
                 Location loc, int width, int height, int thumbnailWidth,
                 int orientation) {
-            boolean ok = Storage.updateImage(mContentResolver, uri, title, loc,
+//            boolean ok = Storage.updateImage(mContentResolver, uri, title, loc,
+	      boolean ok = Storage.updateImage(mContentResolver, Storage.mStorage, uri, title, loc,
                     orientation, data, width, height);
+
             if (ok) {
                 boolean needThumbnail;
                 synchronized (this) {
@@ -1278,7 +1280,8 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
         // Runs in namer thread
         private void generateUri() {
             mTitle = Util.createJpegName(mDateTaken);
-            mUri = Storage.newImage(mResolver, mTitle, mDateTaken, mWidth, mHeight);
+            //mUri = Storage.newImage(mResolver, mTitle, mDateTaken, mWidth, mHeight);
+	    mUri = Storage.newImage(mResolver, Storage.mStorage, mTitle, mDateTaken, mWidth, mHeight);
         }
 
         // Runs in namer thread
@@ -1381,7 +1384,7 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
         // Surface texture is from camera screen nail and startPreview needs it.
         // This must be done before startPreview.
         mIsImageCaptureIntent = isImageCaptureIntent();
-        createCameraScreenNail(!mIsImageCaptureIntent);
+        //createCameraScreenNail(!mIsImageCaptureIntent);
 
         mRecordingTimeView = (TextView) findViewById(R.id.recording_time);
         mRecordingTimeRect = (RotateLayout) findViewById(R.id.recording_time_rect);
@@ -1398,6 +1401,8 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
         mStartPreviewPrerequisiteReady.open();
 
         initializeControlByIntent();
+        mRecordingTimeView = (TextView) findViewById(R.id.recording_time);
+        mRecordingTimeRect = (RotateLayout) findViewById(R.id.recording_time_rect);
         mRotateDialog = new RotateDialogController(this, R.layout.rotate_dialog);
         mNumberOfCameras = CameraHolder.instance().getNumberOfCameras();
         mQuickCapture = getIntent().getBooleanExtra(EXTRA_QUICK_CAPTURE, false);
@@ -1406,6 +1411,8 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
         initOnScreenIndicator();
         // Make sure all views are disabled before camera is open.
         enableCameraControls(false);
+        Storage.mStorage = CameraSettings.readStorage(mPreferences);
+        createCameraScreenNail(!mIsImageCaptureIntent);
     }
 
     private void overrideCameraSettings(final String flashMode,
@@ -1444,8 +1451,9 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
 
     private void initializeIndicatorControl() {
         // setting the indicator buttons.
-        mIndicatorControlContainer =
-                (IndicatorControlContainer) findViewById(R.id.indicator_control);
+        //mIndicatorControlContainer =
+        //        (IndicatorControlContainer) findViewById(R.id.indicator_control);
+	mIndicatorControlContainer = (IndicatorControlContainer)findViewById(R.id.indicator_control);
         loadCameraPreferences();
 
         final String[] SETTING_KEYS = {
@@ -1453,13 +1461,29 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
                 CameraSettings.KEY_WHITE_BALANCE,
                 CameraSettings.KEY_EXPOSURE,
                 CameraSettings.KEY_SCENE_MODE};
+	final String[] OTHER_SETTING_KEYS = {
+                CameraSettings.KEY_STORAGE,
+                CameraSettings.KEY_RECORD_LOCATION,
+                CameraSettings.KEY_POWER_SHUTTER,
+                CameraSettings.KEY_PICTURE_SIZE,
+                CameraSettings.KEY_FOCUS_MODE,
+                CameraSettings.KEY_BURST_MODE,
+                CameraSettings.KEY_JPEG,
+                CameraSettings.KEY_FOCUS_TIME,
+                CameraSettings.KEY_COLOR_EFFECT,
+                CameraSettings.KEY_ISO,
+                CameraSettings.KEY_REDEYE_REDUCTION,
+                CameraSettings.KEY_AUTOEXPOSURE,
+                CameraSettings.KEY_ANTIBANDING};
 
         CameraPicker.setImageResourceId(R.drawable.ic_switch_photo_facing_holo_light);
-        mIndicatorControlContainer.initialize(this, mPreferenceGroup,
-                mParameters.isZoomSupported(),
-                SETTING_KEYS, OTHER_SETTING_KEYS);
-        mCameraPicker = (CameraPicker) mIndicatorControlContainer.findViewById(
-                R.id.camera_picker);
+        //mIndicatorControlContainer.initialize(this, mPreferenceGroup,
+         //       mParameters.isZoomSupported(),
+         //       SETTING_KEYS, OTHER_SETTING_KEYS);
+        //mCameraPicker = (CameraPicker) mIndicatorControlContainer.findViewById(
+        //        R.id.camera_picker);
+	mIndicatorControlContainer.initialize(this, mPreferenceGroup, mParameters.isZoomSupported(), SETTING_KEYS, OTHER_SETTING_KEYS);
+        mCameraPicker = (CameraPicker) mIndicatorControlContainer.findViewById(R.id.camera_picker);
         updateSceneModeUI();
         mIndicatorControlContainer.setListener(this);
     }
@@ -1509,7 +1533,7 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
                 mHandler.removeMessages(SHOW_TAP_TO_FOCUS_TOAST);
                 showTapToFocusToast();
             }
-            mRecordingTimeRect.setOrientation(mOrientationCompensation, false);
+            mRecordingTimeRect.setOrientation(mOrientationCompensation, true);
         }
     }
 
@@ -1540,7 +1564,8 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
     }
 
     private void checkStorage() {
-        mStorageSpace = Storage.getAvailableSpace();
+        //mStorageSpace = Storage.getAvailableSpace();
+	mStorageSpace = Storage.getAvailableSpace(Storage.mStorage);
         updateStorageHint(mStorageSpace);
     }
 
@@ -1658,9 +1683,10 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
 
     @Override
     public void onShutterButtonFocus(boolean pressed) {
-        if (mTimerMode && pressed || mPaused || collapseCameraControls()
-                || (mCameraState == SNAPSHOT_IN_PROGRESS)
-                || (mCameraState == PREVIEW_STOPPED)) return;
+        //if (mTimerMode && pressed || mPaused || collapseCameraControls()
+        //        || (mCameraState == SNAPSHOT_IN_PROGRESS)
+        //        || (mCameraState == PREVIEW_STOPPED)) return;
+	if (mTimerMode && pressed || mPaused || collapseCameraControls() || (mCameraState == SNAPSHOT_IN_PROGRESS) || (mCameraState == PREVIEW_STOPPED)) return;
 
         // Do not do focus if there is not enough storage.
         if (pressed && !canTakePicture()) return;
@@ -1990,11 +2016,13 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         switch (keyCode) {
+	    case KeyEvent.KEYCODE_VOLUME_DOWN:
             case KeyEvent.KEYCODE_FOCUS:
                 if (mFirstTimeInitialized && event.getRepeatCount() == 0) {
                     onShutterButtonFocus(true);
                 }
                 return true;
+	    case KeyEvent.KEYCODE_VOLUME_UP:
             case KeyEvent.KEYCODE_CAMERA:
                 if (mFirstTimeInitialized && event.getRepeatCount() == 0) {
                     onShutterButtonClick();
@@ -2051,6 +2079,9 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         switch (keyCode) {
+            case KeyEvent.KEYCODE_VOLUME_UP:
+                return true;
+            case KeyEvent.KEYCODE_VOLUME_DOWN:
             case KeyEvent.KEYCODE_FOCUS:
                 if (mFirstTimeInitialized) {
                     onShutterButtonFocus(false);
@@ -2336,6 +2367,9 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
             mFocusManager.overrideFocusMode(null);
             mParameters.setFocusMode(mFocusManager.getFocusMode());
 
+             // Set capture mode.
+            mCaptureMode = mPreferences.getString(CameraSettings.KEY_TIMER_MODE, getString(R.string.pref_camera_timer_entry_0));
+
             // Set FOCUS time.
             String defaultFocusTime = getResources().getString(R.string.pref_camera_focus_default);
             String delayFocusTime = mPreferences.getString(CameraSettings.KEY_FOCUS_TIME, defaultFocusTime);
@@ -2350,11 +2384,13 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
         }
 
         // Set Redeye Reduction
-        String redeyeReduction = mPreferences.getString(
-                CameraSettings.KEY_REDEYE_REDUCTION,
-                getString(R.string.pref_camera_redeyereduction_default));
-        if (isSupported(redeyeReduction,
-            mParameters.getSupportedRedeyeReductionModes())) {
+        //String redeyeReduction = mPreferences.getString(
+        //        CameraSettings.KEY_REDEYE_REDUCTION,
+        //        getString(R.string.pref_camera_redeyereduction_default));
+        //if (isSupported(redeyeReduction,
+        //    mParameters.getSupportedRedeyeReductionModes())) {
+	String redeyeReduction = mPreferences.getString(CameraSettings.KEY_REDEYE_REDUCTION, getString(R.string.pref_camera_redeyereduction_default));
+        if (isSupported(redeyeReduction, mParameters.getSupportedRedeyeReductionModes())) {
             mParameters.setRedeyeReductionMode(redeyeReduction);
         }
 
@@ -2513,6 +2549,12 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
         boolean recordLocation = RecordLocationPreference.get(
                 mPreferences, mContentResolver);
         mLocationManager.recordLocation(recordLocation);
+	String storage = CameraSettings.readStorage(mPreferences);
+        if (!storage.equals(Storage.mStorage)) {
+            Storage.mStorage = storage;
+            createCameraScreenNail(!mIsImageCaptureIntent);
+            checkStorage();
+        }
 
         setCameraParametersWhenIdle(UPDATE_PARAM_PREFERENCE);
         setPreviewFrameLayoutAspectRatio();
@@ -2631,7 +2673,10 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
             mIndicatorControlContainer.dismissSettingPopup();
             CameraSettings.restorePreferences(Camera.this, mPreferences,
                     mParameters);
-            mIndicatorControlContainer.reloadPreferences();
+//            mIndicatorControlContainer.reloadPreferences();
+	    try {
+                mIndicatorControlContainer.reloadPreferences();
+            }catch(Exception ex){}
             onSharedPreferenceChanged();
         }
     }

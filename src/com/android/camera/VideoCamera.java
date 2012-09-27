@@ -222,6 +222,7 @@ public class VideoCamera extends ActivityBase
     private int mVideoWidth;
     private int mVideoHeight;
 
+    private boolean bFocusing = false;
     // This Handler is used to post message back onto the main thread of the
     // application
     private class MainHandler extends Handler {
@@ -340,6 +341,7 @@ public class VideoCamera extends ActivityBase
         mNumberOfCameras = CameraHolder.instance().getNumberOfCameras();
         mPrefVideoEffectDefault = getString(R.string.pref_video_effect_default);
         resetEffect();
+        Storage.mStorage = CameraSettings.readStorage(mPreferences);
 
         /*
          * To reduce startup time, we start the preview in another thread.
@@ -446,8 +448,10 @@ public class VideoCamera extends ActivityBase
                     CameraSettings.KEY_VIDEO_QUALITY};
 
         final String[] OTHER_SETTING_KEYS = {
+                    CameraSettings.KEY_STORAGE,
                     CameraSettings.KEY_RECORD_LOCATION,
                     CameraSettings.KEY_POWER_SHUTTER,
+                    CameraSettings.KEY_STABILIZATION,
                     CameraSettings.KEY_COLOR_EFFECT };
 
         CameraPicker.setImageResourceId(R.drawable.ic_switch_video_facing_holo_light);
@@ -635,7 +639,8 @@ public class VideoCamera extends ActivityBase
     }
 
     private void updateAndShowStorageHint() {
-        mStorageSpace = Storage.getAvailableSpace();
+//        mStorageSpace = Storage.getAvailableSpace();
+        mStorageSpace = Storage.getAvailableSpace(Storage.mStorage);
         updateStorageHint(mStorageSpace);
     }
 
@@ -659,6 +664,13 @@ public class VideoCamera extends ActivityBase
             } else {  // 0 is mms.
                 quality = CamcorderProfile.QUALITY_LOW;
             }
+        }
+
+        //Set Video-Stabilization
+        if (mPreferences.getString(CameraSettings.KEY_STABILIZATION, getResources().getString(R.string.pref_camera_stabilization_default)).equals(CameraSettings.VALUE_ON)){
+            mParameters.set("video-stabilization","true");
+        }else{
+	    mParameters.set("video-stabilization","false");
         }
 
         // Set video duration limit. The limit is read from the preference,
@@ -806,7 +818,8 @@ public class VideoCamera extends ActivityBase
         intentFilter.addDataScheme("file");
         mReceiver = new MyBroadcastReceiver();
         registerReceiver(mReceiver, intentFilter);
-        mStorageSpace = Storage.getAvailableSpace();
+        //mStorageSpace = Storage.getAvailableSpace();
+        mStorageSpace = Storage.getAvailableSpace(Storage.mStorage);
 
         mHandler.postDelayed(new Runnable() {
             @Override
@@ -1022,6 +1035,13 @@ public class VideoCamera extends ActivityBase
         }
 
         switch (keyCode) {
+            case KeyEvent.KEYCODE_VOLUME_DOWN:
+                if (event.getRepeatCount() == 0) {
+                    takeVideoSnapshot();
+                    return true;
+                }
+                break;
+            case KeyEvent.KEYCODE_VOLUME_UP:
             case KeyEvent.KEYCODE_CAMERA:
                 if (event.getRepeatCount() == 0) {
                     mShutterButton.performClick();
@@ -1067,6 +1087,9 @@ public class VideoCamera extends ActivityBase
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         switch (keyCode) {
+	    case KeyEvent.KEYCODE_VOLUME_DOWN:
+                return true;
+            case KeyEvent.KEYCODE_VOLUME_UP:
             case KeyEvent.KEYCODE_CAMERA:
                 mShutterButton.setPressed(false);
                 return true;
@@ -1355,7 +1378,8 @@ public class VideoCamera extends ActivityBase
         // Used when emailing.
         String filename = title + convertOutputFormatToFileExt(outputFileFormat);
         String mime = convertOutputFormatToMimeType(outputFileFormat);
-        String path = Storage.DIRECTORY + '/' + filename;
+//        String path = Storage.DIRECTORY + '/' + filename;
+        String path = Storage.generateDirectory(Storage.mStorage) + '/' + filename;
         String tmpPath = path + ".tmp";
         mCurrentVideoValues = new ContentValues(7);
         mCurrentVideoValues.put(Video.Media.TITLE, title);
@@ -1903,6 +1927,9 @@ public class VideoCamera extends ActivityBase
             mParameters.setFocusMode(Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
         }
 
+        // Set focus.
+        mParameters.setFocusMode(Parameters.FOCUS_MODE_AUTO);
+
         mParameters.setRecordingHint(true);
 
         // Enable video stabilization. Convenience methods not available in API
@@ -1927,9 +1954,10 @@ public class VideoCamera extends ActivityBase
                 optimalSize.height);
 
         // Set JPEG quality.
-        int jpegQuality = CameraProfile.getJpegEncodingQualityParameter(mCameraId,
-                CameraProfile.QUALITY_HIGH);
-        mParameters.setJpegQuality(jpegQuality);
+//        int jpegQuality = CameraProfile.getJpegEncodingQualityParameter(mCameraId,
+//                CameraProfile.QUALITY_HIGH);
+//        mParameters.setJpegQuality(jpegQuality);
+        mParameters.setJpegQuality(100);
 
         // Color effect
         String colorEffect = mPreferences.getString(
@@ -2201,8 +2229,11 @@ public class VideoCamera extends ActivityBase
             mIndicatorControlContainer.dismissSettingPopup();
             CameraSettings.restorePreferences(this, mPreferences,
                     mParameters);
-            mIndicatorControlContainer.reloadPreferences();
-            onSharedPreferenceChanged();
+//            mIndicatorControlContainer.reloadPreferences();
+            try{
+                mIndicatorControlContainer.reloadPreferences();
+            }catch(Exception ex){}
+           onSharedPreferenceChanged();
         }
     }
 
@@ -2225,6 +2256,13 @@ public class VideoCamera extends ActivityBase
 
             // Check if the current effects selection has changed
             if (updateEffectSelection()) return;
+
+            String storage = CameraSettings.readStorage(mPreferences);
+            if (!storage.equals(Storage.mStorage)) {
+                Storage.mStorage = storage;
+                createCameraScreenNail(!mIsVideoCaptureIntent);
+                updateAndShowStorageHint();
+            }
 
             readVideoPreferences();
             showTimeLapseUI(mCaptureTimeLapse);
@@ -2423,14 +2461,15 @@ public class VideoCamera extends ActivityBase
     }
 
     private void initializeVideoSnapshot() {
-        if (mParameters.isVideoSnapshotSupported() && !mIsVideoCaptureIntent) {
+//        if (mParameters.isVideoSnapshotSupported() && !mIsVideoCaptureIntent) {
+        if (!mIsVideoCaptureIntent) {
             setSingleTapUpListener(mPreviewFrameLayout);
             // Show the tap to focus toast if this is the first start.
-            if (mPreferences.getBoolean(
-                        CameraSettings.KEY_VIDEO_FIRST_USE_HINT_SHOWN, true)) {
+//            if (mPreferences.getBoolean(
+//                        CameraSettings.KEY_VIDEO_FIRST_USE_HINT_SHOWN, true)) {
                 // Delay the toast for one second to wait for orientation.
-                mHandler.sendEmptyMessageDelayed(SHOW_TAP_TO_SNAPSHOT_TOAST, 1000);
-            }
+//                mHandler.sendEmptyMessageDelayed(SHOW_TAP_TO_SNAPSHOT_TOAST, 1000);
+//            }
         } else {
             setSingleTapUpListener(null);
         }
@@ -2444,20 +2483,40 @@ public class VideoCamera extends ActivityBase
         }
     }
 
+    // Preview area is touched. Focus.
+    private final AutoFocusCallback mAutoFocusCallback = new AutoFocusCallback();
+    private final class AutoFocusCallback implements android.hardware.Camera.AutoFocusCallback {
+        @Override
+        public void onAutoFocus(boolean focused, android.hardware.Camera camera) {
+            bFocusing = false;
+        }
+    }
+
     // Preview area is touched. Take a picture.
     @Override
     protected void onSingleTapUp(View view, int x, int y) {
+        if(mPaused || mSnapshotInProgress || effectsActive())return;
+        if(!bFocusing){
+            bFocusing = true;
+            mCameraDevice.autoFocus(mAutoFocusCallback);
+        }
+    }
+
+    private void takeVideoSnapshot(){
         if (mMediaRecorderRecording && effectsActive()) {
-            new RotateTextToast(this, R.string.disable_video_snapshot_hint,
-                    mOrientation).show();
+//            new RotateTextToast(this, R.string.disable_video_snapshot_hint,
+//                    mOrientation).show();
+            new RotateTextToast(this, R.string.disable_video_snapshot_hint, mOrientation).show();
             return;
         }
 
-        if (mPaused || mSnapshotInProgress
-                || !mMediaRecorderRecording || effectsActive()) {
+//        if (mPaused || mSnapshotInProgress
+//                || !mMediaRecorderRecording || effectsActive()) {
+        if (mPaused || mSnapshotInProgress || !mMediaRecorderRecording || effectsActive()) {
             return;
         }
         // Set rotation and gps data.
+
         int rotation = Util.getJpegRotation(mCameraId, mOrientation);
         mParameters.setRotation(rotation);
         Location loc = mLocationManager.getCurrentLocation();
@@ -2512,7 +2571,8 @@ public class VideoCamera extends ActivityBase
         String title = Util.createJpegName(dateTaken);
         int orientation = Exif.getOrientation(data);
         Size s = mParameters.getPictureSize();
-        Uri uri = Storage.addImage(mContentResolver, title, dateTaken, loc, orientation, data,
+//        Uri uri = Storage.addImage(mContentResolver, title, dateTaken, loc, orientation, data,
+        Uri uri = Storage.addImage(mContentResolver, Storage.mStorage, title, dateTaken, loc, orientation, data,
                 s.width, s.height);
         if (uri != null) {
             // Create a thumbnail whose width is equal or bigger than that of the preview.
@@ -2573,6 +2633,15 @@ public class VideoCamera extends ActivityBase
         editor.putBoolean(CameraSettings.KEY_VIDEO_FIRST_USE_HINT_SHOWN, false);
         editor.apply();
     }
+
+    private void showTapToFocusToast() {
+        new RotateTextToast(this, R.string.tap_to_focus, mOrientationCompensation).show();
+        // Clear the preference.
+        Editor editor = mPreferences.edit();
+        editor.putBoolean(CameraSettings.KEY_VIDEO_FIRST_USE_HINT_SHOWN, false);
+        editor.apply();
+    }
+
 
     private void clearVideoNamer() {
         if (mVideoNamer != null) {
