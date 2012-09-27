@@ -1058,27 +1058,6 @@ public class VideoCamera extends ActivityBase
                 if (mMediaRecorderRecording) return true;
                 break;
 
-            case KeyEvent.KEYCODE_VOLUME_UP:
-                if (mParameters.isZoomSupported()
-                        && mZoomControl != null && mZoomControl.isEnabled()) {
-                    int index = mZoomValue + 1;
-                    if (index <= mZoomMax) {
-                        mZoomControl.setZoomIndex(index);
-                        processZoomValueChanged(index);
-                    }
-                }
-                return true;
-            case KeyEvent.KEYCODE_VOLUME_DOWN:
-                if (mParameters.isZoomSupported()
-                        && mZoomControl != null && mZoomControl.isEnabled()) {
-                    int index = mZoomValue - 1;
-                    if (index >= 0) {
-                        mZoomControl.setZoomIndex(index);
-                        processZoomValueChanged(index);
-                    }
-
-                }
-                return true;
         }
 
         return super.onKeyDown(keyCode, event);
@@ -1098,18 +1077,6 @@ public class VideoCamera extends ActivityBase
                     onShutterButtonClick();
                 }
                 return true;
-            case KeyEvent.KEYCODE_VOLUME_UP:
-                if (mParameters.isZoomSupported()
-                        && mZoomControl != null && mZoomControl.isEnabled()) {
-                    return true;
-                }
-                break;
-            case KeyEvent.KEYCODE_VOLUME_DOWN:
-                if (mParameters.isZoomSupported()
-                        && mZoomControl != null && mZoomControl.isEnabled()) {
-                    return true;
-                }
-                break;
         }
         return super.onKeyUp(keyCode, event);
     }

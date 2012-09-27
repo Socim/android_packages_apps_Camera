@@ -275,14 +275,7 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
     private IndicatorControlContainer mIndicatorControlContainer;
     private PreferenceGroup mPreferenceGroup;
 
-    // Camera timer.
-    private boolean mTimerMode = false;
-    private TextView mRecordingTimeView;
-    private RotateLayout mRecordingTimeRect;
 
-    // Burst mode
-    private int mBurstShotsDone = 0;
-    private boolean mBurstShotInProgress = false;
 
     private boolean mQuickCapture;
 
@@ -419,10 +412,6 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
                     break;
                 }
 
-                case CAMERA_TIMER: {
-                    updateTimer(msg.arg1);
-                    break;
-                }
             }
         }
     }
@@ -2051,26 +2040,6 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
                 }
                 return true;
 
-            case KeyEvent.KEYCODE_VOLUME_UP:
-                if (mParameters.isZoomSupported()
-                        && mZoomControl != null && mZoomControl.isEnabled()) {
-                    int index = mZoomValue + 1;
-                    if (index <= mZoomMax) {
-                        mZoomControl.setZoomIndex(index);
-                        processZoomValueChanged(index);
-                    }
-                }
-                return true;
-            case KeyEvent.KEYCODE_VOLUME_DOWN:
-                if (mParameters.isZoomSupported()
-                        && mZoomControl != null && mZoomControl.isEnabled()) {
-                    int index = mZoomValue - 1;
-                    if (index >= 0) {
-                        mZoomControl.setZoomIndex(index);
-                        processZoomValueChanged(index);
-                    }
-                }
-                return true;
         }
 
         return super.onKeyDown(keyCode, event);
@@ -2092,18 +2061,6 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
                     onShutterButtonClick();
                 }
                 return true;
-            case KeyEvent.KEYCODE_VOLUME_UP:
-                if (mParameters.isZoomSupported()
-                        && mZoomControl != null && mZoomControl.isEnabled()) {
-                    return true;
-                }
-                break;
-            case KeyEvent.KEYCODE_VOLUME_DOWN:
-                if (mParameters.isZoomSupported()
-                        && mZoomControl != null && mZoomControl.isEnabled()) {
-                    return true;
-                }
-                break;
         }
         return super.onKeyUp(keyCode, event);
     }
@@ -2368,7 +2325,7 @@ public class Camera extends ActivityBase implements FocusManager.Listener,
             mParameters.setFocusMode(mFocusManager.getFocusMode());
 
              // Set capture mode.
-            mCaptureMode = mPreferences.getString(CameraSettings.KEY_TIMER_MODE, getString(R.string.pref_camera_timer_entry_0));
+            //mCaptureMode = mPreferences.getString(CameraSettings.KEY_TIMER_MODE, getString(R.string.pref_camera_timer_entry_0));
 
             // Set FOCUS time.
             String defaultFocusTime = getResources().getString(R.string.pref_camera_focus_default);
